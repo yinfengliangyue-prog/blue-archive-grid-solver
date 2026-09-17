@@ -8,11 +8,11 @@
     <link rel="canonical" href="https://yinfengliangyue-prog.github.io/blue-archive-grid-solver/" />
     <meta property="og:type" content="website" />
     <meta property="og:locale" content="zh_CN" />
-    <meta property="og:title" content="翻格子策略实验室｜蔚蓝档案寻宝求解器" />
+    <meta property="og:title" content="翻格子策略开发部｜蔚蓝档案寻宝求解器" />
     <meta property="og:description" content="截图识别棋盘与剩余物品，计算翻格子小游戏的后验概率和推荐落点。所有分析均在浏览器本地完成。" />
     <meta property="og:url" content="https://yinfengliangyue-prog.github.io/blue-archive-grid-solver/" />
     <meta name="twitter:card" content="summary" />
-    <title>翻格子策略实验室｜蔚蓝档案寻宝求解器</title>
+    <title>翻格子策略开发部｜蔚蓝档案寻宝求解器</title>
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
@@ -22,7 +22,7 @@
       <header class="hero">
         <div>
           <div class="eyebrow">GRID STRATEGY LAB · 本地计算</div>
-          <h1>翻格子策略实验室</h1>
+          <h1>翻格子策略开发部</h1>
           <p>把每一次翻开都变成证据。求解器会考虑物体的完整形状、方向、数量与互不重叠约束。</p>
         </div>
         <div class="hero-side">
@@ -41,11 +41,11 @@
               </div>
               <label class="wallpaper-upload"><input id="wallpaperFileInput" type="file" accept="image/*" /><span>＋ 上传自己的壁纸</span><small>图片仅保存在当前浏览器</small></label>
               <div class="appearance-sliders">
-                <label><span>背景模糊 <output id="wallpaperBlurValue">18</output></span><input id="wallpaperBlur" type="range" min="0" max="32" value="18" /></label>
+                <label><span>背景模糊 <output id="wallpaperBlurValue">8</output></span><input id="wallpaperBlur" type="range" min="0" max="32" value="8" /></label>
                 <label><span>背景压暗 <output id="wallpaperDimValue">48</output>%</span><input id="wallpaperDim" type="range" min="20" max="78" value="48" /></label>
-                <label><span>卡片清晰度 <output id="panelOpacityValue">92</output>%</span><input id="panelOpacity" type="range" min="45" max="98" value="92" /></label>
-                <label><span>控件清晰度 <output id="controlOpacityValue">88</output>%</span><input id="controlOpacity" type="range" min="28" max="100" value="88" /></label>
-                <small class="appearance-hint">降低清晰度可露出更多壁纸；文字、物品格与关键按钮始终保持醒目。</small>
+                <label><span>卡片不透明度 <output id="panelOpacityValue">52</output>%</span><input id="panelOpacity" type="range" min="25" max="85" value="52" /></label>
+                <label><span>控件透明度 <output id="controlTransparencyValue">20</output>%</span><input id="controlTransparency" type="range" min="0" max="75" value="20" /></label>
+                <small class="appearance-hint">透明度越高，格子、输入框和次级按钮越能透出壁纸；文字与关键操作保持清晰。</small>
               </div>
             </div>
           </details>
@@ -105,6 +105,7 @@
             <button class="mode-button miss-mode" data-mode="miss" type="button"><i class="mode-icon empty-icon"></i><span><b>已翻空</b><small>确认无物品</small></span></button>
             <button class="mode-button found-mode" data-mode="found" type="button"><i class="mode-icon solid-icon"></i><span><b>物品</b><small>深色占位</small></span></button>
           </div>
+          <button id="foundSkinToggle" class="found-skin-toggle" type="button" aria-pressed="false"><i></i><span>物品格：深色</span><small>切换王小桃</small></button>
           <div class="tool-title">操作方式</div>
           <div id="inputTools" class="tool-grid" role="radiogroup" aria-label="录入工具">
             <button class="tool-button active" data-tool="paint" type="button"><b>✎ 自由画笔</b><small>按住并拖过格子</small></button>

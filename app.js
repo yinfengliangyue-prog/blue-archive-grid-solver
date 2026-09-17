@@ -72,9 +72,18 @@
     return defaultState();
   }
   function saveState() { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
-  function defaultAppearance() { return { wallpaper: "blue-recollection", blur: 18, dim: 48, panel: 92, controls: 88 }; }
+  function defaultAppearance() { return { version: 2, wallpaper: "blue-recollection", blur: 8, dim: 48, panel: 52, controlTransparency: 20, foundStyle: "dark" }; }
   function loadAppearance() {
-    try { return { ...defaultAppearance(), ...JSON.parse(localStorage.getItem(APPEARANCE_KEY) || "{}") }; }
+    try {
+      const saved = JSON.parse(localStorage.getItem(APPEARANCE_KEY) || "{}");
+      if (saved.version !== 2) {
+        saved.version = 2;
+        saved.blur = 8;
+        saved.panel = 52;
+        saved.controlTransparency = saved.controls == null ? 20 : 100 - saved.controls;
+      }
+      return { ...defaultAppearance(), ...saved };
+    }
     catch (_) { return defaultAppearance(); }
   }
   let appearance = loadAppearance();
@@ -84,12 +93,17 @@
     document.documentElement.style.setProperty("--wallpaper-blur", `${appearance.blur}px`);
     document.documentElement.style.setProperty("--wallpaper-dim", (appearance.dim / 100).toFixed(2));
     document.documentElement.style.setProperty("--panel-opacity", (appearance.panel / 100).toFixed(2));
-    document.documentElement.style.setProperty("--control-opacity", (appearance.controls / 100).toFixed(2));
-    document.documentElement.style.setProperty("--control-percent", `${appearance.controls}%`);
+    const controlOpacity = 1 - appearance.controlTransparency / 100;
+    document.documentElement.style.setProperty("--control-opacity", controlOpacity.toFixed(2));
+    document.documentElement.style.setProperty("--control-percent", `${Math.round(controlOpacity * 100)}%`);
     $("wallpaperBlur").value = appearance.blur; $("wallpaperBlurValue").value = appearance.blur;
     $("wallpaperDim").value = appearance.dim; $("wallpaperDimValue").value = appearance.dim;
     $("panelOpacity").value = appearance.panel; $("panelOpacityValue").value = appearance.panel;
-    $("controlOpacity").value = appearance.controls; $("controlOpacityValue").value = appearance.controls;
+    $("controlTransparency").value = appearance.controlTransparency; $("controlTransparencyValue").value = appearance.controlTransparency;
+    document.body.dataset.foundStyle = appearance.foundStyle;
+    $("foundSkinToggle").setAttribute("aria-pressed", String(appearance.foundStyle === "xiaotao"));
+    $("foundSkinToggle").querySelector("span").textContent = `物品格：${appearance.foundStyle === "xiaotao" ? "王小桃" : "深色"}`;
+    $("foundSkinToggle").querySelector("small").textContent = appearance.foundStyle === "xiaotao" ? "切回深色" : "切换王小桃";
     document.querySelectorAll(".wallpaper-preset").forEach((button) => button.classList.toggle("active", button.dataset.wallpaper === appearance.wallpaper));
   }
   function saveAppearance() {
@@ -721,9 +735,13 @@
     applyAppearance(); saveAppearance();
   }));
   $("wallpaperFileInput").addEventListener("change", (event) => useWallpaperFile(event.target.files[0]));
-  [["wallpaperBlur", "blur"], ["wallpaperDim", "dim"], ["panelOpacity", "panel"], ["controlOpacity", "controls"]].forEach(([id, key]) => {
+  [["wallpaperBlur", "blur"], ["wallpaperDim", "dim"], ["panelOpacity", "panel"], ["controlTransparency", "controlTransparency"]].forEach(([id, key]) => {
     $(id).addEventListener("input", (event) => { appearance[key] = Number(event.target.value); applyAppearance(); });
     $(id).addEventListener("change", saveAppearance);
+  });
+  $("foundSkinToggle").addEventListener("click", () => {
+    appearance.foundStyle = appearance.foundStyle === "xiaotao" ? "dark" : "xiaotao";
+    applyAppearance(); saveAppearance();
   });
   $("resetAppearanceButton").addEventListener("click", () => { appearance = defaultAppearance(); applyAppearance(); saveAppearance(); toast("界面设置已恢复默认"); });
   $("closeImageButton").addEventListener("click", closeImageDialog);
