@@ -49,3 +49,43 @@ test("contradictory evidence is reported instead of producing fake probabilities
   assert.equal(result.reason, "NO_LAYOUTS");
 });
 
+test("multiple found cells may be covered by one multi-cell object", () => {
+  const result = Solver.solve({
+    rows: 1, cols: 3,
+    forbiddenMask: 0n,
+    requiredMask: Solver.bit(0) | Solver.bit(1),
+    shapes: [{ id: "d", w: 2, h: 1, count: 1, rotate: false }],
+  });
+  assert.equal(result.ok, true);
+  assert.equal(result.layouts, 1);
+  assert.deepEqual(result.probability, [1, 1, 0]);
+  assert.deepEqual(result.bestCells, []);
+});
+
+test("found cells must be coverable by complete object placements", () => {
+  const result = Solver.solve({
+    rows: 1, cols: 3,
+    forbiddenMask: 0n,
+    requiredMask: Solver.bit(0) | Solver.bit(2),
+    shapes: [{ id: "d", w: 2, h: 1, count: 1, rotate: false }],
+  });
+  assert.equal(result.ok, false);
+  assert.equal(result.reason, "NO_LAYOUTS");
+});
+
+test("keeps valid enumerated layouts when evidence-aware random sampling accepts none", () => {
+  const result = Solver.solve({
+    rows: 1, cols: 4,
+    forbiddenMask: 0n,
+    requiredMask: Solver.bit(1),
+    shapes: [{ id: "d", w: 2, h: 1, count: 1, rotate: false }],
+  }, {
+    exactLayoutLimit: 1,
+    sampleTarget: 5,
+    maxSampleAttempts: 5,
+    random: () => .999,
+  });
+  assert.equal(result.ok, true);
+  assert.equal(result.layouts, 1);
+  assert.equal(result.samplingFallback, "enumerated-prefix");
+});

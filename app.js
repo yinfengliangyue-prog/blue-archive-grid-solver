@@ -233,8 +233,8 @@
     gesture = null; pushHistory(before); saveState(); renderBoard(); scheduleSolve();
   }
 
-  function forbiddenMask() {
-    return state.cells.reduce((mask, value, index) => value === "unknown" ? mask : mask | Solver.bit(index), 0n);
+  function evidenceMask(kind) {
+    return state.cells.reduce((mask, value, index) => value === kind ? mask | Solver.bit(index) : mask, 0n);
   }
 
   function updateSummary() {
@@ -263,6 +263,8 @@
       elements.notice.textContent = "当前状态规模较小：概率与全局策略均为严格精确结果。";
     } else if (result.layoutMode === "exact") {
       elements.notice.textContent = "格子概率已完整枚举；全局策略空间较大，预计翻数采用两步前瞻近似。";
+    } else if (result.samplingFallback === "enumerated-prefix") {
+      elements.notice.textContent = `已知物品格约束较强：已保留 ${result.layouts.toLocaleString("zh-CN")} 个确认合法的布局作为近似后验；结果不是矛盾，但建议继续校正物品边界。`;
     } else {
       const error = (result.maxSampleError95 * 100).toFixed(1);
       elements.notice.textContent = `组合数量很大：已采样 ${result.layouts.toLocaleString("zh-CN")} 个合法布局。单格概率的保守 95% 抽样误差上界约 ±${error} 个百分点，策略为两步前瞻近似。`;
@@ -275,7 +277,13 @@
     elements.solve.firstElementChild.textContent = "计算中…";
     requestAnimationFrame(() => setTimeout(() => {
       try {
-        result = Solver.solve({ rows: state.rows, cols: state.cols, shapes: state.shapes, forbiddenMask: forbiddenMask() }, {
+        result = Solver.solve({
+          rows: state.rows,
+          cols: state.cols,
+          shapes: state.shapes,
+          forbiddenMask: evidenceMask("miss"),
+          requiredMask: evidenceMask("found"),
+        }, {
           exactLayoutLimit: 20000,
           sampleTarget: 3500,
           lookaheadDepth: 2,

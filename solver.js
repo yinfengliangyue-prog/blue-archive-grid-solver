@@ -66,7 +66,8 @@
     }));
   }
 
-  function enumerateLayouts(rows, cols, shapes, forbiddenMask = 0n, limit = 20000) {
+  function enumerateLayouts(rows, cols, shapes, forbiddenMask = 0n, limit = 20000, requiredMask = 0n) {
+    requiredMask = BigInt(requiredMask);
     const groups = buildPlacementGroups(rows, cols, shapes, forbiddenMask);
     if (groups.some((group) => group.placements.length < group.shape.count)) {
       return { layouts: [], exact: true, truncated: false, groups };
@@ -104,6 +105,7 @@
     function visitGroup(groupIndex, occupied, selected) {
       if (truncated) return;
       if (groupIndex === ordered.length) {
+        if ((occupied & requiredMask) !== requiredMask) return;
         if (layouts.length >= limit) {
           truncated = true;
           return;
@@ -123,6 +125,7 @@
     const target = options.target ?? 4000;
     const maxAttempts = options.maxAttempts ?? Math.max(50000, target * 80);
     const random = options.random ?? Math.random;
+    const requiredMask = BigInt(options.requiredMask ?? 0n);
     if (groups.some((group) => group.placements.length < group.shape.count)) {
       return { layouts: [], attempts: 0, accepted: 0, groups };
     }
@@ -150,7 +153,7 @@
         occupied |= placement.mask;
         chosen.push(placement);
       }
-      if (valid) layouts.push(chosen.slice().sort((a, b) => a.key.localeCompare(b.key)));
+      if (valid && (occupied & requiredMask) === requiredMask) layouts.push(chosen.slice().sort((a, b) => a.key.localeCompare(b.key)));
     }
     return { layouts, attempts, accepted: layouts.length, groups };
   }
@@ -373,9 +376,10 @@
     const cols = Math.max(1, Math.floor(Number(config.cols) || 1));
     const cellCount = rows * cols;
     const forbiddenMask = BigInt(config.forbiddenMask ?? 0n);
+    const requiredMask = BigInt(config.requiredMask ?? 0n) & ~forbiddenMask;
     const shapes = normalizeShapes(config.shapes ?? []);
     const exactLimit = options.exactLayoutLimit ?? 20000;
-    const enumerated = enumerateLayouts(rows, cols, shapes, forbiddenMask, exactLimit);
+    const enumerated = enumerateLayouts(rows, cols, shapes, forbiddenMask, exactLimit, requiredMask);
     let layouts = enumerated.layouts;
     let layoutMode = "exact";
     let sampleInfo = null;
@@ -385,15 +389,22 @@
         target: options.sampleTarget ?? 4000,
         maxAttempts: options.maxSampleAttempts,
         random: options.random,
+        requiredMask,
       });
-      layouts = sampleInfo.layouts;
+      if (sampleInfo.layouts.length) {
+        layouts = sampleInfo.layouts;
+      } else {
+        layouts = enumerated.layouts;
+        sampleInfo = { ...sampleInfo, accepted: layouts.length, fallback: "enumerated-prefix" };
+      }
       layoutMode = "sample";
     }
 
     if (!layouts.length) {
+      const noObjects = shapes.length === 0;
       return {
-        ok: shapes.length === 0,
-        reason: shapes.length === 0 ? "NO_OBJECTS" : "NO_LAYOUTS",
+        ok: noObjects && requiredMask === 0n,
+        reason: noObjects && requiredMask === 0n ? "NO_OBJECTS" : "NO_LAYOUTS",
         rows,
         cols,
         layouts: 0,
@@ -402,12 +413,12 @@
         expectedReveal: Array(cellCount).fill(0),
         strategy: Array(cellCount).fill(null),
         bestCells: [],
-        expectedRemainingFlips: shapes.length === 0 ? 0 : Infinity,
+        expectedRemainingFlips: noObjects && requiredMask === 0n ? 0 : Infinity,
         plannerMode: "none",
       };
     }
 
-    const state = { hypotheses: compressLayouts(layouts), unavailableMask: forbiddenMask };
+    const state = { hypotheses: compressLayouts(layouts), unavailableMask: forbiddenMask | requiredMask };
     const metrics = candidateMetrics(state, cellCount);
     const candidateCount = metrics.probability.filter((value) => value > 0).length;
     let plan;
@@ -455,6 +466,7 @@
       plannerMode,
       maxSampleError95,
       sampleAttempts: sampleInfo?.attempts ?? 0,
+      samplingFallback: sampleInfo?.fallback ?? null,
       planDetails: plan,
     };
   }
