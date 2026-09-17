@@ -2,6 +2,12 @@
   "use strict";
   const Solver = window.GridStrategySolver;
   const STORAGE_KEY = "grid-strategy-lab-v1";
+  const APPEARANCE_KEY = "grid-strategy-lab-appearance-v1";
+  const WALLPAPERS = {
+    "blue-recollection": "assets/wallpapers/blue-recollection.png",
+    "highlander-train": "assets/wallpapers/highlander-train.png",
+    hina: "assets/wallpapers/hina.jpg",
+  };
   const defaultState = () => ({
     rows: 5,
     cols: 9,
@@ -66,6 +72,40 @@
     return defaultState();
   }
   function saveState() { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
+  function defaultAppearance() { return { wallpaper: "blue-recollection", blur: 18, dim: 48, panel: 92 }; }
+  function loadAppearance() {
+    try { return { ...defaultAppearance(), ...JSON.parse(localStorage.getItem(APPEARANCE_KEY) || "{}") }; }
+    catch (_) { return defaultAppearance(); }
+  }
+  let appearance = loadAppearance();
+  function applyAppearance() {
+    const wallpaper = appearance.wallpaper === "custom" ? appearance.custom : WALLPAPERS[appearance.wallpaper] || WALLPAPERS["blue-recollection"];
+    document.documentElement.style.setProperty("--wallpaper-image", `url("${wallpaper}")`);
+    document.documentElement.style.setProperty("--wallpaper-blur", `${appearance.blur}px`);
+    document.documentElement.style.setProperty("--wallpaper-dim", (appearance.dim / 100).toFixed(2));
+    document.documentElement.style.setProperty("--panel-opacity", (appearance.panel / 100).toFixed(2));
+    $("wallpaperBlur").value = appearance.blur; $("wallpaperBlurValue").value = appearance.blur;
+    $("wallpaperDim").value = appearance.dim; $("wallpaperDimValue").value = appearance.dim;
+    $("panelOpacity").value = appearance.panel; $("panelOpacityValue").value = appearance.panel;
+    document.querySelectorAll(".wallpaper-preset").forEach((button) => button.classList.toggle("active", button.dataset.wallpaper === appearance.wallpaper));
+  }
+  function saveAppearance() {
+    try { localStorage.setItem(APPEARANCE_KEY, JSON.stringify(appearance)); }
+    catch (_) { toast("壁纸较大，本次可用但无法永久保存"); }
+  }
+  function useWallpaperFile(file) {
+    if (!file?.type.startsWith("image/")) return;
+    const image = new Image();
+    image.onload = () => {
+      const scale = Math.min(1, 1920 / image.naturalWidth, 1080 / image.naturalHeight);
+      const canvas = document.createElement("canvas"); canvas.width = Math.round(image.naturalWidth * scale); canvas.height = Math.round(image.naturalHeight * scale);
+      canvas.getContext("2d").drawImage(image, 0, 0, canvas.width, canvas.height);
+      appearance = { ...appearance, wallpaper: "custom", custom: canvas.toDataURL("image/jpeg", .86) };
+      applyAppearance(); saveAppearance(); toast("自定义壁纸已应用");
+      URL.revokeObjectURL(image.src);
+    };
+    image.src = URL.createObjectURL(file);
+  }
   function uid() { return `s-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`; }
   function clamp(value, min, max) { return Math.min(max, Math.max(min, value)); }
   function cellName(cell) { return `R${Math.floor(cell / state.cols) + 1}C${cell % state.cols + 1}`; }
@@ -665,6 +705,16 @@
   elements.solve.addEventListener("click", solveNow);
 
   $("imageButton").addEventListener("click", openImageDialog);
+  document.querySelectorAll(".wallpaper-preset").forEach((button) => button.addEventListener("click", () => {
+    appearance = { ...appearance, wallpaper: button.dataset.wallpaper };
+    applyAppearance(); saveAppearance();
+  }));
+  $("wallpaperFileInput").addEventListener("change", (event) => useWallpaperFile(event.target.files[0]));
+  [["wallpaperBlur", "blur"], ["wallpaperDim", "dim"], ["panelOpacity", "panel"]].forEach(([id, key]) => {
+    $(id).addEventListener("input", (event) => { appearance[key] = Number(event.target.value); applyAppearance(); });
+    $(id).addEventListener("change", saveAppearance);
+  });
+  $("resetAppearanceButton").addEventListener("click", () => { appearance = defaultAppearance(); applyAppearance(); saveAppearance(); toast("界面设置已恢复默认"); });
   $("closeImageButton").addEventListener("click", closeImageDialog);
   $("imageDialog").addEventListener("click", (event) => { if (event.target === $("imageDialog")) closeImageDialog(); });
   $("imageFileInput").addEventListener("change", (event) => loadRecognitionFile(event.target.files[0]));
@@ -713,6 +763,7 @@
 
   elements.rows.value = state.rows;
   elements.cols.value = state.cols;
+  applyAppearance();
   document.querySelectorAll(".mode-button").forEach((button) => button.classList.toggle("active", button.dataset.mode === state.mode));
   renderShapes(); renderBoard(); solveNow();
   updateHistoryButtons();

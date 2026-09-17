@@ -16,6 +16,8 @@
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
+    <div class="ambient-wallpaper" aria-hidden="true"></div>
+    <div class="ambient-overlay" aria-hidden="true"></div>
     <main class="app-shell">
       <header class="hero">
         <div>
@@ -23,9 +25,28 @@
           <h1>翻格子策略实验室</h1>
           <p>把每一次翻开都变成证据。求解器会考虑物体的完整形状、方向、数量与互不重叠约束。</p>
         </div>
-        <div class="hero-badge" aria-label="隐私说明">
-          <span class="status-dot"></span>
-          数据不离开浏览器
+        <div class="hero-side">
+          <div class="hero-badge" aria-label="隐私说明">
+            <span class="status-dot"></span>
+            数据不离开浏览器
+          </div>
+          <details id="appearancePanel" class="appearance-panel">
+            <summary><span>✦</span> 界面设置</summary>
+            <div class="appearance-popover">
+              <div class="appearance-heading"><div><b>环境壁纸</b><small>只改变背景，不影响功能区</small></div><button id="resetAppearanceButton" type="button">恢复默认</button></div>
+              <div class="wallpaper-presets" aria-label="内置壁纸">
+                <button class="wallpaper-preset active" data-wallpaper="blue-recollection" type="button" style="--thumb:url('assets/wallpapers/blue-recollection.png')"><i></i><span>夕阳</span></button>
+                <button class="wallpaper-preset" data-wallpaper="highlander-train" type="button" style="--thumb:url('assets/wallpapers/highlander-train.png')"><i></i><span>列车</span></button>
+                <button class="wallpaper-preset" data-wallpaper="hina" type="button" style="--thumb:url('assets/wallpapers/hina.jpg')"><i></i><span>室内</span></button>
+              </div>
+              <label class="wallpaper-upload"><input id="wallpaperFileInput" type="file" accept="image/*" /><span>＋ 上传自己的壁纸</span><small>图片仅保存在当前浏览器</small></label>
+              <div class="appearance-sliders">
+                <label><span>背景模糊 <output id="wallpaperBlurValue">18</output></span><input id="wallpaperBlur" type="range" min="0" max="32" value="18" /></label>
+                <label><span>背景压暗 <output id="wallpaperDimValue">48</output>%</span><input id="wallpaperDim" type="range" min="20" max="78" value="48" /></label>
+                <label><span>卡片清晰度 <output id="panelOpacityValue">92</output>%</span><input id="panelOpacity" type="range" min="72" max="98" value="92" /></label>
+              </div>
+            </div>
+          </details>
         </div>
       </header>
 
