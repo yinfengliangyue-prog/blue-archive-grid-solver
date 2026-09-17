@@ -353,7 +353,7 @@
     const ctx = sample.getContext("2d", { willReadFrequently: true });
     ctx.drawImage(image, crop.x, crop.y, crop.w, crop.h, 0, 0, sample.width, sample.height);
     const pixels = ctx.getImageData(0, 0, sample.width, sample.height).data;
-    const detected = [];
+    const detected = [], cellFeatures = [];
     for (let r = 0; r < rows; r += 1) for (let c = 0; c < cols; c += 1) {
       const x0 = Math.floor((c + .22) * sample.width / cols), x1 = Math.ceil((c + .78) * sample.width / cols);
       const y0 = Math.floor((r + .22) * sample.height / rows), y1 = Math.ceil((r + .78) * sample.height / rows);
@@ -372,8 +372,28 @@
       const objectTexture = deviation >= 16 && neutralRate >= .05;
       const plainColoredTile = satRate > .56 && deviation < 20 && !objectTexture;
       detected.push(plainColoredTile ? "unknown" : (darkRate > .18 || satRate > .38 || (neutralRate < .82 && deviation > 30) || mean < 145 ? "found" : "miss"));
+      const wx0 = Math.floor((c + .08) * sample.width / cols), wx1 = Math.ceil((c + .92) * sample.width / cols);
+      const wy0 = Math.floor((r + .08) * sample.height / rows), wy1 = Math.ceil((r + .92) * sample.height / rows);
+      let wideCount = 0, wideSaturated = 0, wideNeutral = 0, wideBrightness = 0, wideBrightnessSq = 0;
+      for (let y = wy0; y < wy1; y += 2) for (let x = wx0; x < wx1; x += 2) {
+        const i = (y * sample.width + x) * 4, red = pixels[i], green = pixels[i + 1], blue = pixels[i + 2];
+        const max = Math.max(red, green, blue), min = Math.min(red, green, blue), light = (max + min) / 2;
+        const sat = max === min ? 0 : (max - min) / (255 - Math.abs(2 * light - 255));
+        const luminance = .2126 * red + .7152 * green + .0722 * blue;
+        wideBrightness += luminance; wideBrightnessSq += luminance * luminance;
+        if (sat > .28 && max - min > 35) wideSaturated += 1;
+        if (max > 190 && max - min < 45) wideNeutral += 1;
+        wideCount += 1;
+      }
+      const wideMean = wideBrightness / wideCount;
+      cellFeatures.push({
+        wideSatRate: wideSaturated / wideCount,
+        wideNeutralRate: wideNeutral / wideCount,
+        wideDeviation: Math.sqrt(Math.max(0, wideBrightnessSq / wideCount - wideMean * wideMean)),
+      });
     }
-    const completed = completeRectangularFoundRegions(detected, rows, cols);
+    const contextual = promoteTexturedRevealedCells(detected, cellFeatures, rows, cols);
+    const completed = completeRectangularFoundRegions(contextual, rows, cols);
     recognition.cells = completed;
     recognition.rows = rows; recognition.cols = cols;
     const visualShapes = detectVisualShapes(pixels, sample.width, sample.height, rows, cols);
@@ -393,6 +413,23 @@
     $("recognitionResult").hidden = false;
     $("recognitionStatus").textContent = `已分析 ${rows * cols} 个格子，可应用后继续校正`;
     $("applyRecognitionButton").disabled = false;
+  }
+  function promoteTexturedRevealedCells(cells, features, rows, cols) {
+    const promoted = cells.slice();
+    cells.forEach((value, index) => {
+      if (value !== "unknown") return;
+      const feature = features[index], row = Math.floor(index / cols), col = index % cols;
+      const texturedObject = feature.wideDeviation >= 24 && feature.wideNeutralRate >= .08 && feature.wideSatRate <= .94;
+      if (!texturedObject) return;
+      let touchesRevealed = false;
+      for (let dr = -1; dr <= 1; dr += 1) for (let dc = -1; dc <= 1; dc += 1) {
+        if (!dr && !dc) continue;
+        const nr = row + dr, nc = col + dc;
+        if (nr >= 0 && nr < rows && nc >= 0 && nc < cols && cells[nr * cols + nc] !== "unknown") touchesRevealed = true;
+      }
+      if (touchesRevealed) promoted[index] = "found";
+    });
+    return promoted;
   }
   function completeRectangularFoundRegions(cells, rows, cols) {
     const completed = cells.slice(), candidates = [];
