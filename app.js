@@ -72,7 +72,7 @@
     return defaultState();
   }
   function saveState() { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
-  function defaultAppearance() { return { wallpaper: "blue-recollection", blur: 18, dim: 48, panel: 92 }; }
+  function defaultAppearance() { return { wallpaper: "blue-recollection", blur: 18, dim: 48, panel: 92, controls: 88 }; }
   function loadAppearance() {
     try { return { ...defaultAppearance(), ...JSON.parse(localStorage.getItem(APPEARANCE_KEY) || "{}") }; }
     catch (_) { return defaultAppearance(); }
@@ -84,9 +84,12 @@
     document.documentElement.style.setProperty("--wallpaper-blur", `${appearance.blur}px`);
     document.documentElement.style.setProperty("--wallpaper-dim", (appearance.dim / 100).toFixed(2));
     document.documentElement.style.setProperty("--panel-opacity", (appearance.panel / 100).toFixed(2));
+    document.documentElement.style.setProperty("--control-opacity", (appearance.controls / 100).toFixed(2));
+    document.documentElement.style.setProperty("--control-percent", `${appearance.controls}%`);
     $("wallpaperBlur").value = appearance.blur; $("wallpaperBlurValue").value = appearance.blur;
     $("wallpaperDim").value = appearance.dim; $("wallpaperDimValue").value = appearance.dim;
     $("panelOpacity").value = appearance.panel; $("panelOpacityValue").value = appearance.panel;
+    $("controlOpacity").value = appearance.controls; $("controlOpacityValue").value = appearance.controls;
     document.querySelectorAll(".wallpaper-preset").forEach((button) => button.classList.toggle("active", button.dataset.wallpaper === appearance.wallpaper));
   }
   function saveAppearance() {
@@ -718,7 +721,7 @@
     applyAppearance(); saveAppearance();
   }));
   $("wallpaperFileInput").addEventListener("change", (event) => useWallpaperFile(event.target.files[0]));
-  [["wallpaperBlur", "blur"], ["wallpaperDim", "dim"], ["panelOpacity", "panel"]].forEach(([id, key]) => {
+  [["wallpaperBlur", "blur"], ["wallpaperDim", "dim"], ["panelOpacity", "panel"], ["controlOpacity", "controls"]].forEach(([id, key]) => {
     $(id).addEventListener("input", (event) => { appearance[key] = Number(event.target.value); applyAppearance(); });
     $(id).addEventListener("change", saveAppearance);
   });
