@@ -1,0 +1,10 @@
+{
+  "name": "grid-strategy-lab",
+  "version": "1.0.0",
+  "private": true,
+  "description": "矩形物体翻格子小游戏的后验概率与期望点击策略求解器",
+  "scripts": {
+    "test": "node --test solver.test.js"
+  },
+  "license": "MIT"
+}

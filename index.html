@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="根据物体尺寸、数量和已翻结果，计算翻格子小游戏的后验概率与最优落点。" />
+    <meta name="robots" content="index, follow" />
+    <link rel="canonical" href="https://yinfengliangyue-prog.github.io/blue-archive-grid-solver/" />
+    <meta property="og:type" content="website" />
+    <meta property="og:locale" content="zh_CN" />
+    <meta property="og:title" content="翻格子策略实验室｜蔚蓝档案寻宝求解器" />
+    <meta property="og:description" content="截图识别棋盘与剩余物品，计算翻格子小游戏的后验概率和推荐落点。所有分析均在浏览器本地完成。" />
+    <meta property="og:url" content="https://yinfengliangyue-prog.github.io/blue-archive-grid-solver/" />
+    <meta name="twitter:card" content="summary" />
+    <title>翻格子策略实验室｜蔚蓝档案寻宝求解器</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <header class="hero">
+        <div>
+          <div class="eyebrow">GRID STRATEGY LAB · 本地计算</div>
+          <h1>翻格子策略实验室</h1>
+          <p>把每一次翻开都变成证据。求解器会考虑物体的完整形状、方向、数量与互不重叠约束。</p>
+        </div>
+        <div class="hero-badge" aria-label="隐私说明">
+          <span class="status-dot"></span>
+          数据不离开浏览器
+        </div>
+      </header>
+
+      <section class="quick-bar" aria-label="快捷操作">
+        <div class="quick-copy"><b>录入工作台</b><span>拖动画格 · 框选批量 · 粘贴截图识别</span></div>
+        <div class="quick-actions">
+          <button id="undoButton" class="icon-button" type="button" title="撤销 (Ctrl+Z)" disabled>↶ <span>撤销</span></button>
+          <button id="redoButton" class="icon-button" type="button" title="重做 (Ctrl+Shift+Z)" disabled>↷ <span>重做</span></button>
+          <button id="imageButton" class="image-button" type="button"><span>⌁</span> 粘贴 / 导入截图</button>
+        </div>
+      </section>
+
+      <section class="workspace">
+        <aside class="control-panel" aria-label="棋盘配置">
+          <div class="section-heading">
+            <div>
+              <span class="step">01</span>
+              <h2>棋盘与物体</h2>
+            </div>
+            <button id="resetButton" class="text-button" type="button">恢复示例</button>
+          </div>
+
+          <div class="dimension-row">
+            <label>行数<input id="rowsInput" type="number" min="1" max="10" value="5" /></label>
+            <span>×</span>
+            <label>列数<input id="colsInput" type="number" min="1" max="12" value="9" /></label>
+            <button id="applySizeButton" class="secondary-button" type="button">应用</button>
+          </div>
+
+          <div class="inventory-title">
+            <span>剩余物体</span>
+            <span class="muted">命中后请减去 1</span>
+          </div>
+          <div id="shapeList" class="shape-list"></div>
+          <div class="shape-actions">
+            <button id="addShapeButton" class="add-button" type="button">＋ 数字添加</button>
+            <button id="presetShapeButton" class="add-button preset-button" type="button">▦ 手动框选预设</button>
+          </div>
+          <div id="presetShapePanel" class="preset-shape-panel" hidden>
+            <div class="preset-head"><b>拖动框出物品占位</b><span id="presetSize">1 × 1</span></div>
+            <div id="presetGrid" class="preset-grid" aria-label="物品形状预设网格"></div>
+            <div class="preset-actions"><button id="cancelPresetButton" type="button">取消</button><button id="confirmPresetButton" type="button">添加此尺寸</button></div>
+          </div>
+
+          <div class="divider"></div>
+          <div class="section-heading compact">
+            <div>
+              <span class="step">02</span>
+              <h2>录入已知结果</h2>
+            </div>
+          </div>
+          <div id="editModes" class="segmented" role="radiogroup" aria-label="格子编辑模式">
+            <button class="mode-button active unknown-mode" data-mode="unknown" type="button"><i class="mode-icon heat-icon">%</i><span><b>待翻</b><small>显示热力值</small></span></button>
+            <button class="mode-button miss-mode" data-mode="miss" type="button"><i class="mode-icon empty-icon"></i><span><b>已翻空</b><small>确认无物品</small></span></button>
+            <button class="mode-button found-mode" data-mode="found" type="button"><i class="mode-icon solid-icon"></i><span><b>物品</b><small>深色占位</small></span></button>
+          </div>
+          <div class="tool-title">操作方式</div>
+          <div id="inputTools" class="tool-grid" role="radiogroup" aria-label="录入工具">
+            <button class="tool-button active" data-tool="paint" type="button"><b>✎ 自由画笔</b><small>按住并拖过格子</small></button>
+            <button class="tool-button" data-tool="box" type="button"><b>▣ 框选填充</b><small>拖出矩形批量修改</small></button>
+            <button class="tool-button object-tool" data-tool="object" type="button"><b>＋ 框选物品</b><small>按选区添加尺寸</small></button>
+          </div>
+          <p id="toolHelper" class="helper">按住鼠标或手指划过格子，连续录入当前状态。</p>
+
+          <button id="solveButton" class="primary-button" type="button">
+            <span>重新计算策略</span><span aria-hidden="true">→</span>
+          </button>
+        </aside>
+
+        <section class="board-panel" aria-label="策略棋盘">
+          <div class="board-toolbar">
+            <div>
+              <span class="step">03</span>
+              <h2>下一格建议</h2>
+            </div>
+            <label class="metric-select">热力图
+              <select id="metricSelect">
+                <option value="probability">命中概率</option>
+                <option value="strategy">预计剩余翻数</option>
+                <option value="expectedReveal">一次识别格数期望</option>
+              </select>
+            </label>
+          </div>
+
+          <div id="notice" class="notice" role="status"></div>
+          <div class="board-wrap">
+            <div id="board" class="board" aria-label="可编辑棋盘"></div>
+          </div>
+          <div class="legend" aria-label="色阶图例">
+            <span id="legendLow">低</span><div class="gradient"></div><span id="legendHigh">高</span>
+            <span class="best-key"><i></i>推荐</span>
+          </div>
+
+          <div class="stats-grid">
+            <article class="stat-card accent">
+              <span>推荐格</span>
+              <strong id="bestCell">—</strong>
+              <small id="bestDetail">等待计算</small>
+            </article>
+            <article class="stat-card">
+              <span>最佳命中率</span>
+              <strong id="bestProbability">—</strong>
+              <small>基于全部当前证据</small>
+            </article>
+            <article class="stat-card">
+              <span>预计剩余翻数</span>
+              <strong id="expectedFlips">—</strong>
+              <small id="plannerLabel">—</small>
+            </article>
+            <article class="stat-card">
+              <span>有效布局</span>
+              <strong id="layoutCount">—</strong>
+              <small id="layoutLabel">—</small>
+            </article>
+          </div>
+        </section>
+      </section>
+
+      <div id="imageDialog" class="dialog-backdrop" hidden>
+        <section class="image-dialog" role="dialog" aria-modal="true" aria-labelledby="imageDialogTitle">
+          <div class="dialog-head">
+            <div><span class="step">AI</span><h2 id="imageDialogTitle">截图识别</h2></div>
+            <button id="closeImageButton" class="close-button" type="button" aria-label="关闭">×</button>
+          </div>
+          <p class="dialog-intro">直接按 <kbd>Ctrl</kbd> + <kbd>V</kbd> 粘贴截图，或选择图片。所有分析仅在本机浏览器完成。</p>
+          <label id="imageDropzone" class="image-dropzone">
+            <input id="imageFileInput" type="file" accept="image/*" />
+            <span class="drop-icon">⌁</span><b>粘贴或选择游戏截图</b><small>支持 PNG、JPG、WebP</small>
+          </label>
+          <div id="recognitionWorkspace" class="recognition-workspace" hidden>
+            <div class="canvas-shell"><canvas id="recognitionCanvas"></canvas><div class="canvas-tip">框内拖动＝移动　拖八个白色把手＝实时缩放</div></div>
+            <aside class="recognition-controls">
+              <div class="recognition-status"><i></i><span id="recognitionStatus">图片已载入</span></div>
+              <div class="zone-switch" role="radiogroup" aria-label="调整识别区域">
+                <button class="zone-button active" data-zone="board" type="button"><i></i>调整棋盘区</button>
+                <button class="zone-button" data-zone="inventory" type="button"><i></i>调整物品栏</button>
+              </div>
+              <div class="recognition-dimensions">
+                <label>行 <input id="recognitionRows" type="number" min="1" max="10" value="5" /></label>
+                <span>×</span>
+                <label>列 <input id="recognitionCols" type="number" min="1" max="12" value="9" /></label>
+              </div>
+              <button id="autoCropButton" class="secondary-button wide" type="button">自动定位两个区域</button>
+              <button id="analyzeButton" class="primary-button" type="button"><span>分别识别两处区域</span><span>→</span></button>
+              <div id="recognitionResult" class="recognition-result" hidden></div>
+              <label class="sync-option"><input id="syncShapes" type="checkbox" checked /> 用识别结果替换 01 区剩余物体</label>
+              <button id="applyRecognitionButton" class="apply-recognition" type="button" disabled>应用识别结果</button>
+            </aside>
+          </div>
+        </section>
+      </div>
+
+      <section class="explain-panel">
+        <div>
+          <span class="step">方法</span>
+          <h2>结果应该怎样读？</h2>
+        </div>
+        <div class="explain-grid">
+          <article><b>命中概率</b><p>一个格子在所有合法完整布局中被任意剩余物体覆盖的比例。</p></article>
+          <article><b>预计剩余翻数</b><p>考虑“翻空”和“命中后整件物体显形”的不同分支；数值越小越优。</p></article>
+          <article><b>精确 / 近似</b><p>小状态空间做完整动态规划；组合过大时自动用布局采样与两步前瞻，并明确标记。</p></article>
+        </div>
+        <p class="assumption"><b>模型假设：</b>所有符合已知信息的完整摆放等可能，物体按格对齐、允许旋转且彼此不重叠。若游戏存在边缘偏好、固定生成权重或物体相邻限制，需要在算法中加入对应先验。</p>
+      </section>
+    </main>
+
+    <script src="solver.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>

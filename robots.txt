@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://yinfengliangyue-prog.github.io/blue-archive-grid-solver/sitemap.xml
