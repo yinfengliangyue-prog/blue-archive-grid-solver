@@ -371,10 +371,11 @@
       const satRate = saturated / count, darkRate = dark / count, neutralRate = brightNeutral / count, mean = brightness / count, deviation=Math.sqrt(Math.max(0,brightnessSq/count-mean*mean));
       detected.push(satRate > .56 && deviation < 20 ? "unknown" : (darkRate > .18 || satRate > .38 || (neutralRate < .82 && deviation > 30) || mean < 145 ? "found" : "miss"));
     }
-    recognition.cells = detected;
+    const completed = completeRectangularFoundRegions(detected, rows, cols);
+    recognition.cells = completed;
     recognition.rows = rows; recognition.cols = cols;
     const visualShapes = detectVisualShapes(pixels, sample.width, sample.height, rows, cols);
-    recognition.shapes = mergeRecognizedShapes(visualShapes.length ? visualShapes : detectObjectShapes(detected, rows, cols));
+    recognition.shapes = mergeRecognizedShapes(visualShapes.length ? visualShapes : detectObjectShapes(completed, rows, cols));
     const inventoryCounts = detectInventoryCounts(image, recognition.inventoryCrop);
     if (inventoryCounts.length) {
       const detectedShapes=recognition.shapes.slice();
@@ -383,13 +384,43 @@
         return {w:known?.w|| (index===inventoryCounts.length-1?1:2),h:known?.h|| (index===inventoryCounts.length-1?1:2),count};
       });
     }
-    const counts = detected.reduce((acc, value) => ((acc[value] = (acc[value] || 0) + 1), acc), {});
+    const counts = completed.reduce((acc, value) => ((acc[value] = (acc[value] || 0) + 1), acc), {});
     const rowsHtml = recognition.shapes.length ? recognition.shapes.map((shape, index) => `<label class="recognized-shape-row"><b>物品 ${index+1} · ${shape.w} × ${shape.h}</b><span>剩余数量</span><input data-recognized-count="${index}" type="number" min="0" max="20" value="${shape.count}"></label>`).join("") : "<small>未识别到物品轮廓，请手动添加。</small>";
     const inventoryText = inventoryCounts.length ? `物品栏读数：${inventoryCounts.join(" / ")}` : "物品栏数字不清晰，请校对数量";
     $("recognitionResult").innerHTML = `<b>双区域识别完成</b><div class="result-counts"><span>待翻 ${counts.unknown || 0}</span><span>空格 ${counts.miss || 0}</span><span>物品 ${counts.found || 0} 格</span></div><div>${inventoryText}</div><div class="recognized-list">${rowsHtml}</div>`;
     $("recognitionResult").hidden = false;
     $("recognitionStatus").textContent = `已分析 ${rows * cols} 个格子，可应用后继续校正`;
     $("applyRecognitionButton").disabled = false;
+  }
+  function completeRectangularFoundRegions(cells, rows, cols) {
+    const completed = cells.slice(), candidates = [];
+    for (let h = 2; h <= Math.min(3, rows); h += 1) for (let w = 2; w <= Math.min(4, cols); w += 1) {
+      const area = w * h;
+      if (area > 12) continue;
+      for (let top = 0; top <= rows - h; top += 1) for (let left = 0; left <= cols - w; left += 1) {
+        let found = 0, miss = 0, unknown = 0;
+        const foundRows = new Set(), foundCols = new Set(), indices = [];
+        for (let r = top; r < top + h; r += 1) for (let c = left; c < left + w; c += 1) {
+          const index = r * cols + c, value = completed[index]; indices.push(index);
+          if (value === "found") { found += 1; foundRows.add(r); foundCols.add(c); }
+          else if (value === "miss") miss += 1;
+          else unknown += 1;
+        }
+        const holes = area - found;
+        if (unknown || miss !== holes || holes < 1 || holes > 2) continue;
+        if (found < 3 || found / area < .6) continue;
+        if (!foundRows.has(top) || !foundRows.has(top + h - 1) || !foundCols.has(left) || !foundCols.has(left + w - 1)) continue;
+        candidates.push({ indices, holes, area, found });
+      }
+    }
+    candidates.sort((a, b) => a.holes - b.holes || b.area - a.area || b.found - a.found);
+    const claimed = new Set();
+    candidates.forEach((candidate) => {
+      const holes = candidate.indices.filter((index) => completed[index] === "miss");
+      if (!holes.length || holes.length > candidate.holes || holes.some((index) => claimed.has(index))) return;
+      holes.forEach((index) => { completed[index] = "found"; claimed.add(index); });
+    });
+    return completed;
   }
   function detectObjectShapes(cells, rows, cols) {
     const visited = new Set(), shapes = [];
