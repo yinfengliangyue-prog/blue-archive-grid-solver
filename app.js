@@ -369,7 +369,9 @@
         count += 1;
       }
       const satRate = saturated / count, darkRate = dark / count, neutralRate = brightNeutral / count, mean = brightness / count, deviation=Math.sqrt(Math.max(0,brightnessSq/count-mean*mean));
-      detected.push(satRate > .56 && deviation < 20 ? "unknown" : (darkRate > .18 || satRate > .38 || (neutralRate < .82 && deviation > 30) || mean < 145 ? "found" : "miss"));
+      const objectTexture = deviation >= 16 && neutralRate >= .05;
+      const plainColoredTile = satRate > .56 && deviation < 20 && !objectTexture;
+      detected.push(plainColoredTile ? "unknown" : (darkRate > .18 || satRate > .38 || (neutralRate < .82 && deviation > 30) || mean < 145 ? "found" : "miss"));
     }
     const completed = completeRectangularFoundRegions(detected, rows, cols);
     recognition.cells = completed;
