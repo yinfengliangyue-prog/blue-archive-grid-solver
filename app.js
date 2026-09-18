@@ -20,9 +20,12 @@
     ],
   });
 
+  let restoredFromStorage = false;
   let state = loadState();
   let result = null;
   let solveTimer = null;
+  let solveWorker = null;
+  let solveRequestId = 0;
   let inputTool = "paint";
   let gesture = null;
   let history = [];
@@ -67,11 +70,17 @@
   function loadState() {
     try {
       const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
-      if (saved && saved.rows * saved.cols === saved.cells.length) return saved;
+      if (saved && saved.rows * saved.cols === saved.cells.length) {
+        restoredFromStorage = true;
+        return saved;
+      }
     } catch (_) { /* start clean */ }
     return defaultState();
   }
-  function saveState() { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
+  function saveState() {
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
+    catch (_) { toast("当前棋盘无法保存到浏览器"); }
+  }
   function defaultAppearance() { return { version: 2, wallpaper: "blue-recollection", blur: 8, dim: 48, panel: 52, controlTransparency: 20, foundStyle: "dark" }; }
   function loadAppearance() {
     try {
@@ -288,36 +297,84 @@
     }
   }
 
+  function finishSolve(requestId, nextResult) {
+    if (requestId !== solveRequestId) return;
+    result = nextResult;
+    updateSummary(); renderBoard();
+    solveWorker?.terminate();
+    solveWorker = null;
+    elements.solve.disabled = false;
+    elements.solve.firstElementChild.textContent = "重新计算策略";
+  }
+
+  function failSolve(requestId, error) {
+    if (requestId !== solveRequestId) return;
+    console.error(error);
+    solveWorker?.terminate();
+    solveWorker = null;
+    elements.notice.className = "notice error";
+    elements.notice.textContent = "计算遇到异常，请缩小棋盘或减少物体数量后重试。";
+    elements.solve.disabled = false;
+    elements.solve.firstElementChild.textContent = "重新计算策略";
+  }
+
+  function cancelSolve() {
+    solveRequestId += 1;
+    solveWorker?.terminate();
+    solveWorker = null;
+    elements.solve.disabled = false;
+    elements.solve.firstElementChild.textContent = "重新计算策略";
+  }
+
   function solveNow() {
     clearTimeout(solveTimer);
+    cancelSolve();
+    const requestId = solveRequestId;
     elements.solve.disabled = true;
     elements.solve.firstElementChild.textContent = "计算中…";
-    requestAnimationFrame(() => setTimeout(() => {
+    elements.notice.className = "notice";
+    elements.notice.textContent = "正在后台计算；期间仍可编辑棋盘或清空重置。";
+    const config = {
+      rows: state.rows,
+      cols: state.cols,
+      shapes: state.shapes,
+      forbiddenMask: evidenceMask("miss"),
+      requiredMask: evidenceMask("found"),
+    };
+    const options = {
+      exactLayoutLimit: 20000,
+      sampleTarget: 3500,
+      lookaheadDepth: 2,
+      beamWidth: 7,
+    };
+
+    if (typeof Worker !== "undefined") {
       try {
-        result = Solver.solve({
-          rows: state.rows,
-          cols: state.cols,
-          shapes: state.shapes,
-          forbiddenMask: evidenceMask("miss"),
-          requiredMask: evidenceMask("found"),
-        }, {
-          exactLayoutLimit: 20000,
-          sampleTarget: 3500,
-          lookaheadDepth: 2,
-          beamWidth: 7,
+        solveWorker = new Worker("solver-worker.js?v=5");
+        solveWorker.addEventListener("message", (event) => {
+          if (event.data.id !== requestId) return;
+          if (event.data.error) failSolve(requestId, new Error(event.data.error));
+          else finishSolve(requestId, event.data.result);
         });
-        updateSummary(); renderBoard();
+        solveWorker.addEventListener("error", (event) => failSolve(requestId, event.error || new Error(event.message)));
+        solveWorker.postMessage({ id: requestId, config, options });
+        return;
       } catch (error) {
-        console.error(error);
-        elements.notice.className = "notice error";
-        elements.notice.textContent = "计算遇到异常，请缩小棋盘或减少物体数量后重试。";
-      } finally {
-        elements.solve.disabled = false;
-        elements.solve.firstElementChild.textContent = "重新计算策略";
+        console.warn("Web Worker unavailable; using main thread", error);
       }
+    }
+
+    requestAnimationFrame(() => setTimeout(() => {
+      if (requestId !== solveRequestId) return;
+      try { finishSolve(requestId, Solver.solve(config, options)); }
+      catch (error) { failSolve(requestId, error); }
     }, 20));
   }
-  function scheduleSolve() { clearTimeout(solveTimer); solveTimer = setTimeout(solveNow, 260); }
+  function scheduleSolve() {
+    clearTimeout(solveTimer);
+    cancelSolve();
+    solveTimer = setTimeout(solveNow, 260);
+  }
 
   function applySize() {
     const before = snapshot();
@@ -721,10 +778,13 @@
   $("applySizeButton").addEventListener("click", applySize);
   $("resetButton").addEventListener("click", () => {
     const before = snapshot();
+    clearTimeout(solveTimer); cancelSolve();
     state = defaultState(); result = null;
+    try { localStorage.removeItem(STORAGE_KEY); } catch (_) { /* state is still reset for this session */ }
     elements.rows.value = state.rows; elements.cols.value = state.cols;
     document.querySelectorAll(".mode-button").forEach((button) => button.classList.toggle("active", button.dataset.mode === state.mode));
-    pushHistory(before); renderShapes(); renderBoard(); saveState(); solveNow();
+    pushHistory(before); renderShapes(); renderBoard(); solveNow();
+    toast("已清空上次保存的棋盘并恢复示例");
   });
   elements.metric.addEventListener("change", renderBoard);
   elements.solve.addEventListener("click", solveNow);
@@ -794,6 +854,11 @@
   elements.cols.value = state.cols;
   applyAppearance();
   document.querySelectorAll(".mode-button").forEach((button) => button.classList.toggle("active", button.dataset.mode === state.mode));
-  renderShapes(); renderBoard(); solveNow();
+  renderShapes(); renderBoard();
+  if (restoredFromStorage) {
+    elements.notice.className = "notice";
+    elements.notice.textContent = "已恢复上次棋盘。为避免复杂局面再次卡住，本次没有自动计算；可直接清空重置，或手动计算当前策略。";
+    elements.solve.firstElementChild.textContent = "计算当前策略";
+  } else solveNow();
   updateHistoryButtons();
 })();
