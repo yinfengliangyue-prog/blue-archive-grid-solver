@@ -421,13 +421,23 @@
     for(let y=0;y<h;y+=1){let rowSum=0,rowGX=0,rowGY=0;for(let x=0;x<w;x+=1){const p=(y*w+x)*4,r=pixels[p],g=pixels[p+1],b=pixels[p+2],max=Math.max(r,g,b),min=Math.min(r,g,b);rowSum+=(max-min>42&&max>115)?1:0;if(x>0)rowGX+=Math.abs(r-pixels[p-4])+Math.abs(g-pixels[p-3])+Math.abs(b-pixels[p-2]);if(y>0){const up=p-w*4;rowGY+=Math.abs(r-pixels[up])+Math.abs(g-pixels[up+1])+Math.abs(b-pixels[up+2]);}const at=(y+1)*(w+1)+x+1,above=y*(w+1)+x+1;integral[at]=integral[above]+rowSum;gradX[at]=gradX[above]+rowGX;gradY[at]=gradY[above]+rowGY;}}
     const rectMean=(source,x0,y0,x1,y1,normalizer=1)=>{x0=clamp(Math.floor(x0),0,w);x1=clamp(Math.ceil(x1),0,w);y0=clamp(Math.floor(y0),0,h);y1=clamp(Math.ceil(y1),0,h);const total=source[y1*(w+1)+x1]-source[y0*(w+1)+x1]-source[y1*(w+1)+x0]+source[y0*(w+1)+x0];return total/Math.max(1,(x1-x0)*(y1-y0)*normalizer);};
     const mean=(cx,cy,radius)=>rectMean(integral,cx-radius,cy-radius,cx+radius,cy+radius);
-    const wideLayout=image.naturalWidth/image.naturalHeight>1.9,cellMin=wideLayout?.056:.052,cellMax=wideLayout?.063:.061;
-    const minCell=Math.max(12,Math.floor(w*cellMin)),maxCell=Math.min(Math.floor(w*cellMax),Math.floor(Math.min(w/cols,h/rows)*.9));
-    let best={score:-Infinity,x:w*.43,y:h*.18,cell:Math.min(w/cols*.52,h/rows*.52)};
-    const test=(x,y,cell)=>{let centers=0,edges=0;const radius=Math.max(2,cell*.16),strip=Math.max(1,cell*.035);for(let r=0;r<rows;r+=1)for(let c=0;c<cols;c+=1)centers+=mean(x+(c+.5)*cell,y+(r+.5)*cell,radius);for(let c=0;c<=cols;c+=1)edges+=rectMean(gradX,x+c*cell-strip,y,x+c*cell+strip,y+rows*cell,765);for(let r=0;r<=rows;r+=1)edges+=rectMean(gradY,x,y+r*cell-strip,x+cols*cell,y+r*cell+strip,765);return centers/(rows*cols)*2.7+edges/(cols+rows+2)*2.4+cell*.012;};
-    for(let cell=minCell;cell<=maxCell;cell+=2){for(let y=Math.floor(h*.09);y<=h-rows*cell;y+=4){for(let x=Math.floor(w*.40);x<=w-cols*cell;x+=4){const score=test(x,y,cell);if(score>best.score)best={score,x,y,cell};}}}
+    const baseCell=Math.min(w/cols,h/rows);
+    const minCell=Math.max(10,Math.floor(baseCell*.24)),maxCell=Math.max(minCell,Math.floor(baseCell*.78));
+    let best={score:-Infinity,x:w*.43,y:h*.25,cell:baseCell*.5};
+    const test=(x,y,cell)=>{let centers=0,edges=0,insideEdges=0;const radius=Math.max(2,cell*.18),strip=Math.max(1,cell*.04);for(let r=0;r<rows;r+=1)for(let c=0;c<cols;c+=1)centers+=mean(x+(c+.5)*cell,y+(r+.5)*cell,radius);for(let c=0;c<=cols;c+=1)edges+=rectMean(gradX,x+c*cell-strip,y,x+c*cell+strip,y+rows*cell,765);for(let r=0;r<=rows;r+=1)edges+=rectMean(gradY,x,y+r*cell-strip,x+cols*cell,y+r*cell+strip,765);for(let c=0;c<cols;c+=1)insideEdges+=rectMean(gradX,x+(c+.5)*cell-strip,y,x+(c+.5)*cell+strip,y+rows*cell,765);for(let r=0;r<rows;r+=1)insideEdges+=rectMean(gradY,x,y+(r+.5)*cell-strip,x+cols*cell,y+(r+.5)*cell+strip,765);const periodic=Math.max(0,edges/(cols+rows+2)-insideEdges/(cols+rows));const rightBias=(x+cols*cell*.5)/w;return centers/(rows*cols)*2.2+periodic*3.3+edges/(cols+rows+2)*.65+rightBias*.16;};
+    for(let cell=minCell;cell<=maxCell;cell+=2){for(let y=Math.floor(h*.08);y<=Math.min(h-rows*cell,h*.82);y+=4){for(let x=Math.floor(w*.24);x<=w-cols*cell;x+=4){const score=test(x,y,cell);if(score>best.score)best={score,x,y,cell};}}}
     const rough=best;for(let cell=Math.max(minCell,rough.cell-3);cell<=Math.min(maxCell,rough.cell+3);cell+=1){for(let y=Math.max(0,rough.y-5);y<=Math.min(h-rows*cell,rough.y+5);y+=1){for(let x=Math.max(0,rough.x-5);x<=Math.min(w-cols*cell,rough.x+5);x+=1){const score=test(x,y,cell);if(score>best.score)best={score,x,y,cell};}}}
     return {x:best.x/scale,y:best.y/scale,w:cols*best.cell/scale,h:rows*best.cell/scale,confidence:best.score};
+  }
+  function normalizeBoardCrop(crop, rows, cols, image) {
+    if (!crop || !image) return crop;
+    const ratio = cols / rows, centerX = crop.x + crop.w / 2, centerY = crop.y + crop.h / 2;
+    let width = crop.w, height = crop.h;
+    if (width / height > ratio) width = height * ratio; else height = width / ratio;
+    width = clamp(width, cols * 12, image.naturalWidth);
+    height = width / ratio;
+    if (height > image.naturalHeight) { height = image.naturalHeight; width = height * ratio; }
+    return { ...crop, x: clamp(centerX - width / 2, 0, image.naturalWidth - width), y: clamp(centerY - height / 2, 0, image.naturalHeight - height), w: width, h: height };
   }
   function autoCrop() {
     if (!recognition.image) return;
@@ -467,10 +477,14 @@
     for (let r = 1; r < rows; r += 1) { const y = (boardCrop.y + boardCrop.h * r / rows) * sy; ctx.beginPath(); ctx.moveTo(boardCrop.x * sx, y); ctx.lineTo((boardCrop.x + boardCrop.w) * sx, y); ctx.stroke(); }
   }
   function analyzeRecognition() {
-    const image = recognition.image, crop = recognition.boardCrop;
+    const image = recognition.image;
+    let crop = recognition.boardCrop;
     if (!image || !crop) return;
     const rows = clamp(Number($("recognitionRows").value) || 5, 1, 10);
     const cols = clamp(Number($("recognitionCols").value) || 9, 1, 12);
+    crop = normalizeBoardCrop(crop, rows, cols, image);
+    recognition.boardCrop = crop;
+    drawRecognitionCanvas();
     const sample = document.createElement("canvas"); sample.width = Math.max(180, cols * 32); sample.height = Math.max(100, rows * 32);
     const ctx = sample.getContext("2d", { willReadFrequently: true });
     ctx.drawImage(image, crop.x, crop.y, crop.w, crop.h, 0, 0, sample.width, sample.height);
@@ -491,9 +505,6 @@
         count += 1;
       }
       const satRate = saturated / count, darkRate = dark / count, neutralRate = brightNeutral / count, mean = brightness / count, deviation=Math.sqrt(Math.max(0,brightnessSq/count-mean*mean));
-      const objectTexture = deviation >= 16 && neutralRate >= .05;
-      const plainColoredTile = satRate > .56 && deviation < 20 && !objectTexture;
-      detected.push(plainColoredTile ? "unknown" : (darkRate > .18 || satRate > .38 || (neutralRate < .82 && deviation > 30) || mean < 145 ? "found" : "miss"));
       const wx0 = Math.floor((c + .08) * sample.width / cols), wx1 = Math.ceil((c + .92) * sample.width / cols);
       const wy0 = Math.floor((r + .08) * sample.height / rows), wy1 = Math.ceil((r + .92) * sample.height / rows);
       let wideCount = 0, wideSaturated = 0, wideNeutral = 0, wideBrightness = 0, wideBrightnessSq = 0;
@@ -508,18 +519,19 @@
         wideCount += 1;
       }
       const wideMean = wideBrightness / wideCount;
-      cellFeatures.push({
+      const feature = {
         wideSatRate: wideSaturated / wideCount,
         wideNeutralRate: wideNeutral / wideCount,
         wideDeviation: Math.sqrt(Math.max(0, wideBrightnessSq / wideCount - wideMean * wideMean)),
-      });
+      };
+      cellFeatures.push(feature);
+      const coloredTile = satRate > .38 && feature.wideSatRate > .32 && neutralRate < .52 && darkRate < .48 && mean > 92;
+      detected.push(coloredTile ? "unknown" : "miss");
     }
-    const contextual = promoteTexturedRevealedCells(detected, cellFeatures, rows, cols);
-    const completed = completeRectangularFoundRegions(contextual, rows, cols);
+    const completed = detected;
     recognition.cells = completed;
     recognition.rows = rows; recognition.cols = cols;
-    const visualShapes = detectVisualShapes(pixels, sample.width, sample.height, rows, cols);
-    recognition.shapes = mergeRecognizedShapes(visualShapes.length ? visualShapes : detectObjectShapes(completed, rows, cols));
+    recognition.shapes = state.shapes.map((shape) => ({ w: shape.w, h: shape.h, count: shape.count }));
     const inventoryCounts = detectInventoryCounts(image, recognition.inventoryCrop);
     if (inventoryCounts.length) {
       const detectedShapes=recognition.shapes.slice();
@@ -531,7 +543,7 @@
     const counts = completed.reduce((acc, value) => ((acc[value] = (acc[value] || 0) + 1), acc), {});
     const rowsHtml = recognition.shapes.length ? recognition.shapes.map((shape, index) => `<label class="recognized-shape-row"><b>物品 ${index+1} · ${shape.w} × ${shape.h}</b><span>剩余数量</span><input data-recognized-count="${index}" type="number" min="0" max="20" value="${shape.count}"></label>`).join("") : "<small>未识别到物品轮廓，请手动添加。</small>";
     const inventoryText = inventoryCounts.length ? `物品栏读数：${inventoryCounts.join(" / ")}` : "物品栏数字不清晰，请校对数量";
-    $("recognitionResult").innerHTML = `<b>双区域识别完成</b><div class="result-counts"><span>待翻 ${counts.unknown || 0}</span><span>空格 ${counts.miss || 0}</span><span>物品 ${counts.found || 0} 格</span></div><div>${inventoryText}</div><div class="recognized-list">${rowsHtml}</div>`;
+    $("recognitionResult").innerHTML = `<b>双区域识别完成</b><div class="result-counts"><span>待翻 ${counts.unknown || 0}</span><span>已翻区域 ${counts.miss || 0}</span><span>物品约束 0 格</span></div><div class="recognition-policy">已完整显形的物品按空格处理，不再占用剩余物品数量。</div><div>${inventoryText}</div><div class="recognized-list">${rowsHtml}</div>`;
     $("recognitionResult").hidden = false;
     $("recognitionStatus").textContent = `已分析 ${rows * cols} 个格子，可应用后继续校正`;
     $("applyRecognitionButton").disabled = false;
@@ -843,7 +855,13 @@
     if (recognition.activeZone === "board") recognition.boardCrop = nextCrop; else recognition.inventoryCrop = nextCrop;
     drawRecognitionCanvas();
   });
-  $("recognitionCanvas").addEventListener("pointerup", () => { cropDrag = null; $("applyRecognitionButton").disabled = true; });
+  $("recognitionCanvas").addEventListener("pointerup", () => {
+    if (recognition.activeZone === "board" && recognition.boardCrop) {
+      recognition.boardCrop = normalizeBoardCrop(recognition.boardCrop, Number($("recognitionRows").value) || 5, Number($("recognitionCols").value) || 9, recognition.image);
+      drawRecognitionCanvas();
+    }
+    cropDrag = null; $("applyRecognitionButton").disabled = true;
+  });
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape" && !$("imageDialog").hidden) closeImageDialog();
     if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "z") { event.preventDefault(); event.shiftKey ? redo() : undo(); }

@@ -218,6 +218,7 @@ kbd { border: 1px solid #cbd1dd; border-bottom-width: 2px; border-radius: 5px; p
 .recognition-dimensions input { width: 74px; padding: 8px; }
 .wide { width: 100%; }
 .recognition-result { padding: 11px; border: 1px solid var(--line); border-radius: 10px; background: #fbfcfe; font-size: 11px; line-height: 1.6; }
+.recognition-policy { margin: 7px 0; padding: 7px 8px; border-radius: 7px; background: #eef7ff; color: #1763ad; font-size: 9px; }
 .result-counts { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 7px; }
 .result-counts span { padding: 3px 7px; border-radius: 99px; background: #eef2f8; }
 .recognized-list { display: grid; gap: 5px; margin-top: 9px; }
